@@ -19,7 +19,7 @@ import time
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Extract pose from video files')
-    parser.add_argument('--input_dir', type=str, help='Input directory containing video files', default='intermediate\\preprocessedvideos', required=False)
+    parser.add_argument('--input_dir', type=str, help='Input directory containing video files', default='input\\videos', required=False)
     parser.add_argument('--output_dir', type=str, help='Output directory to save extracted pose', default='intermediate\\extractedpose', required=False)
     parser.add_argument('--video', type=str, help='Video file to extract pose', default=None, required=False)
     parser.add_argument('--model', type=str, help='Model to use for pose extraction', default=None, required=False)
