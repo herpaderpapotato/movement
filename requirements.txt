@@ -3,4 +3,9 @@ torch
 torchvision
 torchaudio
 ultralytics
-ffmpeg-python
+python-dotenv
+tqdm
+pillow
+pandas
+numpy
+opencv-python

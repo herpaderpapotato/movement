@@ -11,7 +11,6 @@ import json
 import cv2
 from ultralytics import YOLO
 import torch
-import ffmpeg
 from torchaudio.io import StreamReader, StreamWriter
 import pickle
 import time
