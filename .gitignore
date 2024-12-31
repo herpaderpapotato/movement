@@ -169,3 +169,15 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# working environment
+/.conda
+
+# videos
+*.mp4
+
+# intermediate files
+*.json
+
+# output files
+*.funscript
