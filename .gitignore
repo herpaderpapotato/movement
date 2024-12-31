@@ -172,6 +172,7 @@ cython_debug/
 
 # working environment
 /.conda
+/archived
 
 # videos
 *.mp4
@@ -181,3 +182,7 @@ cython_debug/
 
 # output files
 *.funscript
+
+# models
+*.pt
+*.onnx
