@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, help='Model to use for pose extraction', default=None, required=False)
     parser.add_argument('--start_time', type=int, help='Start time in seconds to extract pose', default=0, required=False)
     parser.add_argument('--end_time', type=int, help='End time in seconds to extract pose', default=None, required=False)
-    parser.add_argument('--batch_size', type=int, help='Batch size for pose extraction. Use -1 for auto', default=120, required=False)
+    parser.add_argument('--batch_size', type=int, help='Batch size for pose extraction.', default=120, required=False)
     parser.add_argument('--device', type=str, help='Device to use for pose extraction', default='auto', required=False, choices=['cuda', 'cpu', 'cuda:0', 'cuda:1', 'auto'])
 
     args = parser.parse_args()
@@ -171,17 +171,29 @@ if __name__ == '__main__':
             results_superset = []
             for i, (chunk, ) in enumerate(s.stream()):
                 chunk = chunk.float() / 255.0
-                y[:, :, :] = chunk[:, 0, :, :]
-                u[:, :, :] = chunk[:, 1, :, :] - 0.5
-                v[:, :, :] = chunk[:, 2, :, :] - 0.5
-                # r[:, :, :] = y + 1.14 * v
-                # g[:, :, :] = y -0.396 * u - 0.581 * v
-                # b[:, :, :] = y + 2.029 * u
-                rgb_frames[:, 0, :, :] = y + 2.029 * u # b
-                rgb_frames[:, 1, :, :] = y -0.396 * u - 0.581 * v # g
-                rgb_frames[:, 2, :, :] = y + 1.14 * v # r
-                rgb_frames = rgb_frames.clamp_(0.0, 1.0)
 
+                if batch_size == chunk.shape[0]:
+                    y[:, :, :] = chunk[:, 0, :, :]
+                    u[:, :, :] = chunk[:, 1, :, :] - 0.5
+                    v[:, :, :] = chunk[:, 2, :, :] - 0.5
+                    # r[:, :, :] = y + 1.14 * v
+                    # g[:, :, :] = y -0.396 * u - 0.581 * v
+                    # b[:, :, :] = y + 2.029 * u
+                    rgb_frames[:, 0, :, :] = y + 2.029 * u # b
+                    rgb_frames[:, 1, :, :] = y -0.396 * u - 0.581 * v # g
+                    rgb_frames[:, 2, :, :] = y + 1.14 * v # r
+                    rgb_frames = rgb_frames.clamp(0.0, 1.0)
+                else:
+                    # last chunk
+                    y = chunk[:, 0, :, :]
+                    u = chunk[:, 1, :, :] - 0.5
+                    v = chunk[:, 2, :, :] - 0.5
+                    rgb_frames = torch.zeros((chunk.shape[0], 3, 640, 640), dtype=torch.float32, device=device)
+                    rgb_frames[:, 0, :, :] = y + 2.029 * u # b
+                    rgb_frames[:, 1, :, :] = y -0.396 * u - 0.581 * v # g
+                    rgb_frames[:, 2, :, :] = y + 1.14 * v # r
+                    rgb_frames = rgb_frames.clamp(0.0, 1.0)
+                    
                 results = model.predict(rgb_frames, verbose=False, save=False, save_frames=False, save_txt=False)
                 for j in range(len(results)):
                     results[j].orig_img = None
@@ -208,8 +220,11 @@ if __name__ == '__main__':
                     print("|  Frames  |   %   | Play Pos | Work Time| Rem. Time| End Time |")
 
 
-                if end_time and i >= duration_frames:
+                if end_time and (i+1)*batch_size >= duration_frames:
                     break
+                if (i+1)*batch_size >= num_frames:
+                    break              
+
             s.close()
 
         except KeyboardInterrupt:

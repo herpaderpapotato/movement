@@ -182,6 +182,7 @@ cython_debug/
 
 # output files
 *.funscript
+*.pickle
 
 # models
 *.pt
