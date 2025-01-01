@@ -224,7 +224,6 @@ if __name__ == '__main__':
                 if (i+1)*batch_size >= num_frames:
                     break              
 
-            s.close()
 
         except KeyboardInterrupt:
             print('KeyboardInterrupt. Exiting...')
@@ -236,6 +235,7 @@ if __name__ == '__main__':
             pickle.dump(results_superset, open(output_file, 'wb'))
             print(e)
             continue
+        pickle.dump(results_superset, open(output_file, 'wb'))
     
 
        
