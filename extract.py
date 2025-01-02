@@ -4,7 +4,6 @@ dotenv.load_dotenv()
 dll_direnv = os.getenv('DLL_DIR', None)
 if dll_direnv:
     os.add_dll_directory(dll_direnv)
-
 from glob import glob
 import argparse
 import json
@@ -15,8 +14,42 @@ from torchaudio.io import StreamReader, StreamWriter
 import pickle
 import time
 
-if __name__ == '__main__':
-    
+failback_model_url = "https://huggingface.co/herpaderpapotato/pose-vrlens-finetunes-multiclass/resolve/main/yolo11m-pose/yolo11m-pose.pt"
+failback_model_size = 43.0 # MB
+
+# loose code flow:
+# 1. parse arguments
+# 2. find models
+# 3. find videos
+# 4. for each video, extract pose with torchaudio (wierd that it's not a torchvision thing)
+# 5. save the results to a pickle file at the end of each video
+#
+#
+# nano model processing time for 120 frames batch of 8k x 4k video is about 1.1 seconds on a 3090.
+#   ~ 25 minutes for a 50 minute 4096p video because torchaudio loads and processes the frames on the GPU, and then the model processes them on the GPU.
+# medium model processing time for 120 frames batch of 8k x 4k video is about 1.6 seconds on a 3090.
+#   ~ 37 minutes for a 50 minute 4096p video
+#
+# Bigger batch doesn't seem to be faster. Smaller batch do get slower.
+# VRAM usage TBA. Current benchmark is 120 frames at 4096p input, 640p output, with yolo11m-pose model 22GB VRAM usage. 21.1gb exactly. l is 22.2gb
+# anecdotally, nano model is 7mb, medium model is 43mb. i.e 120x7mb = 840mb, 120x43mb = 5160mb. TBA is this is accurate.
+#
+# The best way to capture the results was to just keep them in memory and save them at the end, but the orig_img field is a memory hog so it's set to None as soon as possible. 
+# 46minute video = 211mb of results in a pickle file. YOLO results are kept on the CPU, so it's not a VRAM hog.
+
+
+def download_model(url, model_dir):
+    import requests
+    import shutil
+    model_file_name = url.split('/')[-1]
+    print(f'Downloading model {model_file_name} from {url}, it should be quick, about {failback_model_size:.1f}MB')
+    r = requests.get(url, stream=True)
+    with open(os.path.join(model_dir, model_file_name), 'wb') as f:
+        shutil.copyfileobj(r.raw, f)
+    return model_file_name
+
+
+if __name__ == '__main__':    
     parser = argparse.ArgumentParser(description='Extract pose from video files')
     parser.add_argument('--input_dir', type=str, help='Input directory containing video files', default='input\\videos', required=False)
     parser.add_argument('--output_dir', type=str, help='Output directory to save extracted pose', default='intermediate\\extractedpose', required=False)
@@ -35,7 +68,7 @@ if __name__ == '__main__':
     video_file_filter = args.video
     start_time = args.start_time
     end_time = args.end_time
-    batch_size = args.batch_size
+    batch_size = args.batch_size  # should do something with auto batch sizing based on VRAM
     device = args.device
 
     if device == 'auto':
@@ -57,11 +90,23 @@ if __name__ == '__main__':
     if not model:
         models = glob('input\\models\\*.pt')
         if not models:
-            raise ValueError('No pose models found in input\\models directory and no model specified')
+            #raise ValueError('No pose models found in input\\models directory and no model specified')
+            # download the model instead of raising an error
+            model_file_name = download_model(failback_model_url, 'input\\models')
+            # check to see if model was downloaded
+            models = glob('input\\models\\*.pt')
+            if not models:
+                raise ValueError('No pose models found in input\\models directory and no model specified and failed to download model')
         # filter to models with -pose in the name
         models = [model for model in models if '-pose' in model]
         if not models:
-            raise ValueError('No pose models found in input\\models directory and no model specified')
+            #raise ValueError('No pose models found in input\\models directory and no model specified')
+            # download the model instead of raising an error
+            model_file_name = download_model(failback_model_url, 'input\\models')
+            # check to see if model was downloaded
+            models = glob('input\\models\\*.pt')
+            if not models:
+                raise ValueError('No pose models found in input\\models directory and no model specified and failed to download model')
         # sort models by date modified
         models = sorted(models, key=os.path.getmtime, reverse=True)
         # choose the most recent model
@@ -125,7 +170,7 @@ if __name__ == '__main__':
 
             cap.release()
 
-            s = StreamReader(video_file)
+            s = StreamReader(video_file) # there will be an error to catch here if there's issues opening the file, including missing ffmpeg
             srcinfo = s.get_src_stream_info(0)
             num_frames = srcinfo.num_frames
             frame_rate = srcinfo.frame_rate
@@ -136,7 +181,7 @@ if __name__ == '__main__':
             if codec == 'hevc':
                 config = {
                     "decoder": "hevc_cuvid",  # Use CUDA HW decoder
-                    "hw_accel": "cuda",  # Then keep the memory on CUDA
+                    "hw_accel": device,  # Then keep the memory on CUDA
                     "decoder_option": {
                         "crop": f"0x0x{frame_width}x0",
                         "resize": "640x640",
@@ -145,7 +190,7 @@ if __name__ == '__main__':
             elif codec == 'h264':
                 config = {
                     "decoder": "h264_cuvid",  # Use CUDA HW decoder
-                    "hw_accel": "cuda",  # Then keep the memory on CUDA
+                    "hw_accel": device,  # Then keep the memory on CUDA
                     "decoder_option": {
                         "crop": f"0x0x{frame_width}x0",
                         "resize": "640x640",

@@ -9,3 +9,4 @@ pillow
 pandas
 numpy
 opencv-python
+matplotlib

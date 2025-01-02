@@ -179,10 +179,12 @@ cython_debug/
 
 # intermediate files
 *.json
+*.ipynb
 
 # output files
 *.funscript
 *.pickle
+*.npz
 
 # models
 *.pt
