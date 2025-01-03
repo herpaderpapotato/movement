@@ -135,9 +135,28 @@ if __name__ == '__main__':
         try:
             print(f'Extracting pose from {video_file}')
             video_name = os.path.basename(video_file)
+            print()
 
+            cap = cv2.VideoCapture(video_file)
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if start_time:
+                cap.set(cv2.CAP_PROP_POS_MSEC, start_time * 1000)
+                start_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))                
+            else:
+                start_frame = 0
+            if end_time:
+                cap.set(cv2.CAP_PROP_POS_MSEC, end_time * 1000)
+                end_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+                duration_frames = end_frame - start_frame
+            else:
+                duration_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) - start_frame
+
+            cap.release()
+            
             if start_time or end_time:
-                video_name = f'{start_time}_{end_time}_{video_name}'
+                video_name = f'{start_frame}_{end_frame}_{video_name}'
             
             output_file = os.path.join(output_dir, f'{video_name}.pickle')
             print(f'Output file will be {output_file}')
@@ -149,26 +168,9 @@ if __name__ == '__main__':
             if not model:
                 model = YOLO(model_file_name).to(device)
 
-            print(f'Extracting pose from {video_file}')
-            print()
-
-            cap = cv2.VideoCapture(video_file)
-            fps = int(cap.get(cv2.CAP_PROP_FPS))
-            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) // 2
-            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            if not start_time:
-                cap.set(cv2.CAP_PROP_POS_MSEC, start_time * 1000)
-                start_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-            else:
-                start_frame = 0
-            if end_time:
-                cap.set(cv2.CAP_PROP_POS_MSEC, end_time * 1000)
-                end_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-                duration_frames = end_frame - start_frame
-            else:
-                duration_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) - start_frame
-
-            cap.release()
+            results_superset = []
+            for i in range(0, duration_frames):
+                results_superset.append([])
 
             s = StreamReader(video_file) # there will be an error to catch here if there's issues opening the file, including missing ffmpeg
             srcinfo = s.get_src_stream_info(0)
@@ -212,7 +214,6 @@ if __name__ == '__main__':
             r = torch.zeros((120, 640, 640), dtype=torch.float32, device=device)
             g = torch.zeros((120, 640, 640), dtype=torch.float32, device=device)
             b = torch.zeros((120, 640, 640), dtype=torch.float32, device=device)
-            results_superset = []
             for i, (chunk, ) in enumerate(s.stream()):
                 chunk = chunk.float() / 255.0
 
